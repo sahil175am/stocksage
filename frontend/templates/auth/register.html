@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Create Account — StockSage{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="auth-logo">◈</div>
+      <h1 class="auth-title">STOCK<span class="accent">SAGE</span></h1>
+      <p class="auth-subtitle">Join thousands of investors making smarter decisions with AI-powered market analysis.</p>
+    </div>
+    <div class="auth-features">
+      <div class="feature-item"><span class="fi-icon">◎</span> Live RSI &amp; SMA charts for any ticker</div>
+      <div class="feature-item"><span class="fi-icon">⬡</span> AI buy/sell/hold signals</div>
+      <div class="feature-item"><span class="fi-icon">▦</span> Portfolio tracker with P&amp;L</div>
+      <div class="feature-item"><span class="fi-icon">◈</span> Real-time market news</div>
+      <div class="feature-item"><span class="fi-icon">✦</span> 100% free, no credit card needed</div>
+    </div>
+    <div class="auth-grid-bg" aria-hidden="true"></div>
+  </div>
+
+  <div class="auth-right">
+    <div class="auth-form-box">
+      <div class="form-header">
+        <h2>CREATE ACCOUNT</h2>
+        <p>Set up your free StockSage terminal</p>
+      </div>
+
+      <form method="POST" action="{{ url_for('auth.register') }}" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}"/>
+
+        <div class="field-group">
+          <label for="username" class="field-label">USERNAME</label>
+          <div class="field-wrap">
+            <span class="field-icon">⬡</span>
+            <input type="text" id="username" name="username" class="field-input"
+              placeholder="e.g. traderpro" required minlength="3" maxlength="30"
+              value="{{ username or '' }}" autocomplete="username" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="email" class="field-label">EMAIL ADDRESS</label>
+          <div class="field-wrap">
+            <span class="field-icon">@</span>
+            <input type="email" id="email" name="email" class="field-input"
+              placeholder="you@email.com" required
+              value="{{ email or '' }}" autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="password" class="field-label">PASSWORD <span class="label-hint">(min. 8 chars)</span></label>
+          <div class="field-wrap">
+            <span class="field-icon">◉</span>
+            <input type="password" id="password" name="password" class="field-input"
+              placeholder="••••••••" required minlength="8" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="confirm_password" class="field-label">CONFIRM PASSWORD</label>
+          <div class="field-wrap">
+            <span class="field-icon">◉</span>
+            <input type="password" id="confirm_password" name="confirm_password" class="field-input"
+              placeholder="••••••••" required minlength="8" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <p class="privacy-note">
+          ✦ We store only your username, email, and hashed password. No tracking. No ads. Ever.
+        </p>
+
+        <button type="submit" class="btn-primary btn-full">
+          <span>LAUNCH MY TERMINAL</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <div class="auth-switch">
+        <span>Already have an account?</span>
+        <a href="{{ url_for('auth.login') }}" class="switch-link">Sign in →</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

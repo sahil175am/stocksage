@@ -1,0 +1,40 @@
+{
+  "name": "StockSage — Market Intelligence",
+  "short_name": "StockSage",
+  "description": "Real-time stock analysis, AI insights, and portfolio tracking.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080c10",
+  "theme_color": "#00ff88",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Analyze Stock",
+      "short_name": "Analyze",
+      "description": "Analyze a stock ticker",
+      "url": "/stock/analyze",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Portfolio",
+      "short_name": "Portfolio",
+      "description": "View your portfolio",
+      "url": "/portfolio",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Login — StockSage{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="auth-logo">◈</div>
+      <h1 class="auth-title">STOCK<span class="accent">SAGE</span></h1>
+      <p class="auth-subtitle">Real-time market intelligence.<br/>AI-powered insights. Your portfolio, secured.</p>
+    </div>
+    <div class="auth-stats">
+      <div class="stat-item">
+        <span class="stat-num">10,000+</span>
+        <span class="stat-label">Tickers Supported</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">Live</span>
+        <span class="stat-label">Market Data</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">AI</span>
+        <span class="stat-label">Powered Insights</span>
+      </div>
+    </div>
+    <div class="auth-grid-bg" aria-hidden="true"></div>
+  </div>
+
+  <div class="auth-right">
+    <div class="auth-form-box">
+      <div class="form-header">
+        <h2>ACCESS TERMINAL</h2>
+        <p>Sign in to your StockSage account</p>
+      </div>
+
+      <form method="POST" action="{{ url_for('auth.login') }}" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}"/>
+
+        <div class="field-group">
+          <label for="email" class="field-label">EMAIL ADDRESS</label>
+          <div class="field-wrap">
+            <span class="field-icon">@</span>
+            <input type="email" id="email" name="email" class="field-input" placeholder="you@email.com" required autocomplete="email" />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="password" class="field-label">PASSWORD</label>
+          <div class="field-wrap">
+            <span class="field-icon">⬡</span>
+            <input type="password" id="password" name="password" class="field-input" placeholder="••••••••" required autocomplete="current-password" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <label class="checkbox-label">
+            <input type="checkbox" name="remember" />
+            <span class="checkbox-custom"></span>
+            Keep me signed in
+          </label>
+        </div>
+
+        <button type="submit" class="btn-primary btn-full">
+          <span>ENTER TERMINAL</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <div class="auth-switch">
+        <span>No account?</span>
+        <a href="{{ url_for('auth.register') }}" class="switch-link">Create one free →</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

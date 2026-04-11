@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">ADMIN DASHBOARD</h1>
+    <p class="page-subtitle">Platform-wide statistics and user management.</p>
+  </div>
+  <div class="page-header-right">
+    <span class="nav-admin-badge">★ ADMIN MODE</span>
+  </div>
+</div>
+
+<!-- Stats row -->
+<div class="admin-stats-row">
+  <div class="admin-stat-card">
+    <span class="asc-icon">👥</span>
+    <span class="asc-num">{{ total_users }}</span>
+    <span class="asc-label">TOTAL USERS</span>
+  </div>
+  <div class="admin-stat-card">
+    <span class="asc-icon">▦</span>
+    <span class="asc-num">{{ total_portfolios }}</span>
+    <span class="asc-label">PORTFOLIO POSITIONS</span>
+  </div>
+  <div class="admin-stat-card">
+    <span class="asc-icon">◉</span>
+    <span class="asc-num">{{ total_watchlists }}</span>
+    <span class="asc-label">WATCHLIST ITEMS</span>
+  </div>
+  <div class="admin-stat-card">
+    <span class="asc-icon">🔔</span>
+    <span class="asc-num">{{ total_alerts }}</span>
+    <span class="asc-label">PRICE ALERTS</span>
+  </div>
+  <div class="admin-stat-card">
+    <span class="asc-icon">✓</span>
+    <span class="asc-num">{{ triggered_alerts }}</span>
+    <span class="asc-label">ALERTS TRIGGERED</span>
+  </div>
+</div>
+
+<div class="admin-grid">
+
+  <!-- Recent users -->
+  <div class="admin-card">
+    <div class="card-header"><span class="card-title">RECENT USERS</span><span class="card-icon">👥</span></div>
+    <table class="admin-table">
+      <thead>
+        <tr><th>USERNAME</th><th>EMAIL</th><th>JOINED</th><th>ADMIN</th></tr>
+      </thead>
+      <tbody>
+        {% for user in recent_users %}
+        <tr>
+          <td style="color:var(--accent);font-family:var(--font-mono)">{{ user.username }}</td>
+          <td style="color:var(--text-secondary);font-size:0.78rem">{{ user.email }}</td>
+          <td style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.72rem">{{ user.created_at.strftime("%b %d, %Y") }}</td>
+          <td>{% if user.is_admin %}<span style="color:var(--amber)">★</span>{% else %}<span style="color:var(--text-dim)">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Top tickers -->
+  <div class="admin-card">
+    <div class="card-header"><span class="card-title">TOP PORTFOLIO TICKERS</span><span class="card-icon">▦</span></div>
+    <div class="top-tickers-list">
+      {% for ticker, cnt in top_tickers_portfolio %}
+      <div class="ttl-item">
+        <span class="ttl-ticker">{{ ticker }}</span>
+        <div class="ttl-bar-wrap">
+          <div class="ttl-bar" style="width:{{ (cnt / (top_tickers_portfolio[0][1] or 1) * 100)|int }}%"></div>
+        </div>
+        <span class="ttl-count">{{ cnt }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Top watchlist tickers -->
+  <div class="admin-card">
+    <div class="card-header"><span class="card-title">TOP WATCHLIST TICKERS</span><span class="card-icon">◉</span></div>
+    <div class="top-tickers-list">
+      {% for ticker, cnt in top_tickers_watchlist %}
+      <div class="ttl-item">
+        <span class="ttl-ticker">{{ ticker }}</span>
+        <div class="ttl-bar-wrap">
+          <div class="ttl-bar" style="width:{{ (cnt / (top_tickers_watchlist[0][1] or 1) * 100)|int }}%;background:var(--purple)"></div>
+        </div>
+        <span class="ttl-count">{{ cnt }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<div class="admin-note">
+  <span>★ To grant admin access to a user, set <code>is_admin=True</code> in the database directly.</span>
+</div>
+{% endblock %}

@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Market News — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">MARKET PULSE</h1>
+    <p class="page-subtitle">Real-time financial news from across the market — clear, fast, and relevant.</p>
+  </div>
+  <div class="page-header-right">
+    <span class="live-badge">● LIVE FEED</span>
+  </div>
+</div>
+
+<!-- Ticker-specific news search -->
+<div class="news-search-bar">
+  <form class="ns-form" onsubmit="loadTickerNews(event)">
+    <input type="text" id="newsTickerInput" class="search-input" placeholder="Search news for a specific ticker (e.g. AAPL)…"
+      maxlength="10" autocomplete="off" value="{{ ticker or '' }}" />
+    <button type="submit" class="search-btn">SEARCH →</button>
+  </form>
+</div>
+
+<div class="news-layout">
+
+  <!-- Main news column -->
+  <div class="news-main">
+    <div class="news-section-header" id="newsHeader">
+      <span class="nsh-title">GENERAL MARKET NEWS</span>
+      <span class="nsh-count">{{ articles|length }} stories</span>
+    </div>
+    <div id="newsContainer">
+      {% if articles %}
+      <div class="news-grid">
+        {% for a in articles %}
+        <div class="news-card">
+          <div class="nc-source">{{ a.source }} &nbsp;·&nbsp; {{ a.published }}</div>
+          <a href="{{ a.link }}" target="_blank" rel="noopener" class="nc-title">{{ a.title }}</a>
+          <p class="nc-summary">{{ a.summary }}</p>
+          <a href="{{ a.link }}" target="_blank" rel="noopener" class="nc-readmore">Read full story →</a>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-hint">No news articles available right now. Check back soon.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Sidebar - trending tickers -->
+  <div class="news-sidebar">
+    <div class="sidebar-card">
+      <div class="sc-title">QUICK LINKS</div>
+      <div class="sidebar-tickers">
+        {% for t in ['AAPL','TSLA','NVDA','MSFT','GOOGL','AMZN','META','BTC-USD','ETH-USD','SPY'] %}
+        <button class="sidebar-ticker-btn" onclick="searchTickerNews('{{ t }}')">{{ t }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="sidebar-card mt-3">
+      <div class="sc-title">MARKET HOURS</div>
+      <div class="market-hours">
+        <div class="mh-item">
+          <span class="mh-label">NYSE / NASDAQ</span>
+          <span class="mh-val">9:30 AM – 4:00 PM ET</span>
+        </div>
+        <div class="mh-item">
+          <span class="mh-label">Pre-Market</span>
+          <span class="mh-val">4:00 AM – 9:30 AM ET</span>
+        </div>
+        <div class="mh-item">
+          <span class="mh-label">After Hours</span>
+          <span class="mh-val">4:00 PM – 8:00 PM ET</span>
+        </div>
+        <div class="mh-item">
+          <span class="mh-label">Crypto</span>
+          <span class="mh-val">24 / 7 / 365</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-card mt-3">
+      <div class="sc-title">DATA SOURCES</div>
+      <div class="sources-list">
+        <div class="source-item">◈ Yahoo Finance RSS</div>
+        <div class="source-item">◈ Google News RSS</div>
+        <div class="source-item">◈ Reuters Finance</div>
+      </div>
+      <p class="source-note">All news sourced from free, public RSS feeds. No API key required.</p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadTickerNews(e) {
+  e.preventDefault();
+  const ticker = document.getElementById('newsTickerInput').value.trim().toUpperCase();
+  if (!ticker) return;
+  searchTickerNews(ticker);
+}
+
+function searchTickerNews(ticker) {
+  document.getElementById('newsTickerInput').value = ticker;
+  document.getElementById('newsHeader').innerHTML = `
+    <span class="nsh-title">NEWS FOR: <span class="accent">${ticker}</span></span>
+    <span class="nsh-count">Loading…</span>
+  `;
+  document.getElementById('newsContainer').innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+
+  fetch(`/news/api/${ticker}`)
+    .then(r => r.json())
+    .then(articles => {
+      document.getElementById('newsHeader').innerHTML = `
+        <span class="nsh-title">NEWS FOR: <span class="accent">${ticker}</span></span>
+        <span class="nsh-count">${articles.length} stories</span>
+      `;
+      if (!articles.length) {
+        document.getElementById('newsContainer').innerHTML = `<p class="empty-hint">No news found for ${ticker}. Try a different ticker.</p>`;
+        return;
+      }
+      document.getElementById('newsContainer').innerHTML = `
+        <div class="news-grid">
+          ${articles.map(a => `
+            <div class="news-card">
+              <div class="nc-source">${a.source} · ${a.published}</div>
+              <a href="${a.link}" target="_blank" rel="noopener" class="nc-title">${a.title}</a>
+              <p class="nc-summary">${a.summary}</p>
+              <a href="${a.link}" target="_blank" rel="noopener" class="nc-readmore">Read full story →</a>
+            </div>
+          `).join('')}
+        </div>`;
+    }).catch(() => {
+      document.getElementById('newsContainer').innerHTML = '<p class="empty-hint">Could not load news. Please try again.</p>';
+    });
+}
+
+// Auto-load ticker news if one was passed in the URL
+const urlTicker = new URLSearchParams(window.location.search).get('ticker');
+if (urlTicker) searchTickerNews(urlTicker.toUpperCase());
+</script>
+{% endblock %}

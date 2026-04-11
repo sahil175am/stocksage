@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Portfolio — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">YOUR PORTFOLIO</h1>
+    <p class="page-subtitle">Track your positions, monitor P&amp;L, and stay on top of your investments.</p>
+  </div>
+  <div class="page-header-right">
+    <button class="btn-primary" onclick="document.getElementById('addModal').classList.add('open')">+ ADD POSITION</button>
+  </div>
+</div>
+
+<!-- Portfolio Summary -->
+{% if items %}
+<div class="port-summary-row">
+  <div class="ps-card">
+    <span class="psc-label">TOTAL INVESTED</span>
+    <span class="psc-val">${{ "%.2f"|format(total_invested) }}</span>
+  </div>
+  <div class="ps-card">
+    <span class="psc-label">CURRENT VALUE</span>
+    <span class="psc-val">${{ "%.2f"|format(total_current) }}</span>
+  </div>
+  <div class="ps-card {{ 'ps-pos' if total_pnl >= 0 else 'ps-neg' }}">
+    <span class="psc-label">TOTAL P&amp;L</span>
+    <span class="psc-val">{{ '+' if total_pnl >= 0 else '' }}${{ "%.2f"|format(total_pnl) }}</span>
+  </div>
+  <div class="ps-card {{ 'ps-pos' if total_pnl_pct >= 0 else 'ps-neg' }}">
+    <span class="psc-label">RETURN</span>
+    <span class="psc-val">{{ '+' if total_pnl_pct >= 0 else '' }}{{ "%.2f"|format(total_pnl_pct) }}%</span>
+  </div>
+  <div class="ps-card">
+    <span class="psc-label">POSITIONS</span>
+    <span class="psc-val">{{ items|length }}</span>
+  </div>
+</div>
+
+<!-- Portfolio Table -->
+<div class="port-table-wrap">
+  <table class="port-table">
+    <thead>
+      <tr>
+        <th>TICKER</th>
+        <th>COMPANY</th>
+        <th>SHARES</th>
+        <th>BUY PRICE</th>
+        <th>CURRENT</th>
+        <th>INVESTED</th>
+        <th>VALUE</th>
+        <th>P&amp;L</th>
+        <th>RETURN</th>
+        <th>DATE</th>
+        <th>ACTIONS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr class="port-row {{ 'row-pos' if item.pnl >= 0 else 'row-neg' }}">
+        <td class="td-ticker">
+          <a href="{{ url_for('stock.analyze') }}?ticker={{ item.ticker }}" class="ticker-link">{{ item.ticker }}</a>
+        </td>
+        <td class="td-name">{{ item.company_name }}</td>
+        <td>{{ item.shares }}</td>
+        <td>${{ "%.2f"|format(item.buy_price) }}</td>
+        <td>${{ "%.2f"|format(item.current_price) }}</td>
+        <td>${{ "%.2f"|format(item.invested) }}</td>
+        <td>${{ "%.2f"|format(item.current_value) }}</td>
+        <td class="{{ 'pos' if item.pnl >= 0 else 'neg' }}">
+          {{ '+' if item.pnl >= 0 else '' }}${{ "%.2f"|format(item.pnl) }}
+        </td>
+        <td class="{{ 'pos' if item.pnl_pct >= 0 else 'neg' }}">
+          {{ '+' if item.pnl_pct >= 0 else '' }}{{ "%.2f"|format(item.pnl_pct) }}%
+        </td>
+        <td class="td-date">{{ item.buy_date }}</td>
+        <td class="td-actions">
+          <a href="{{ url_for('stock.analyze') }}?ticker={{ item.ticker }}" class="act-btn act-analyze" title="Analyze">◎</a>
+          <form action="{{ url_for('portfolio.remove', item_id=item.id) }}" method="POST" style="display:inline"
+            onsubmit="return confirm('Remove {{ item.ticker }} from portfolio?')">
+            <button type="submit" class="act-btn act-remove" title="Remove">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% if item.notes %}
+      <tr class="notes-row">
+        <td colspan="11" class="notes-cell">📝 {{ item.notes }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<!-- Empty portfolio -->
+<div class="empty-portfolio">
+  <div class="ep-icon">▦</div>
+  <h2>Your Portfolio is Empty</h2>
+  <p>Start tracking your stock positions. Add a stock to see live P&amp;L, returns, and more.</p>
+  <button class="btn-primary" onclick="document.getElementById('addModal').classList.add('open')">ADD YOUR FIRST STOCK →</button>
+</div>
+{% endif %}
+
+<!-- Add Position Modal -->
+<div class="modal-overlay" id="addModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">ADD POSITION</span>
+      <button class="modal-close" onclick="document.getElementById('addModal').classList.remove('open')">✕</button>
+    </div>
+    <form action="{{ url_for('portfolio.add') }}" method="POST" class="modal-form">
+      <div class="field-group">
+        <label class="field-label">TICKER SYMBOL</label>
+        <div class="field-wrap">
+          <span class="field-icon">◎</span>
+          <input type="text" name="ticker" class="field-input" placeholder="e.g. AAPL" required
+            maxlength="10" style="text-transform:uppercase" />
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">COMPANY NAME <span class="label-hint">(optional)</span></label>
+        <div class="field-wrap">
+          <span class="field-icon">⬡</span>
+          <input type="text" name="company_name" class="field-input" placeholder="e.g. Apple Inc." />
+        </div>
+      </div>
+      <div class="modal-row">
+        <div class="field-group">
+          <label class="field-label">SHARES</label>
+          <div class="field-wrap">
+            <span class="field-icon">#</span>
+            <input type="number" name="shares" class="field-input" placeholder="e.g. 10" step="0.01" min="0.01" required />
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">BUY PRICE ($)</label>
+          <div class="field-wrap">
+            <span class="field-icon">$</span>
+            <input type="number" name="buy_price" class="field-input" placeholder="e.g. 145.00" step="0.01" min="0.01" required />
+          </div>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">NOTES <span class="label-hint">(optional)</span></label>
+        <div class="field-wrap">
+          <span class="field-icon">📝</span>
+          <input type="text" name="notes" class="field-input" placeholder="Why did you buy? Target price?" maxlength="300" />
+        </div>
+      </div>
+      <button type="submit" class="btn-primary btn-full">ADD TO PORTFOLIO →</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

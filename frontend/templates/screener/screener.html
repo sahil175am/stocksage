@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Stock Screener — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">STOCK SCREENER</h1>
+    <p class="page-subtitle">Filter stocks by technical indicators to find your next opportunity.</p>
+  </div>
+  <div class="page-header-right">
+    {% if ran %}<span class="result-badge">{{ results|length }} match{% if results|length != 1 %}es{% endif %}</span>{% endif %}
+  </div>
+</div>
+
+<div class="screener-layout">
+
+  <!-- Filter Panel -->
+  <div class="filter-panel">
+    <form action="{{ url_for('screener.index') }}" method="POST" id="screenerForm">
+
+      <div class="fp-section">
+        <div class="fp-title">RSI (14)</div>
+        <div class="fp-row">
+          <div class="fp-field">
+            <label class="field-label">MIN</label>
+            <input type="number" name="rsi_min" class="fp-input" placeholder="e.g. 0" min="0" max="100" step="1"
+              value="{{ filters.get('rsi_min', '') if filters else '' }}" />
+          </div>
+          <span class="fp-sep">—</span>
+          <div class="fp-field">
+            <label class="field-label">MAX</label>
+            <input type="number" name="rsi_max" class="fp-input" placeholder="e.g. 30" min="0" max="100" step="1"
+              value="{{ filters.get('rsi_max', '') if filters else '' }}" />
+          </div>
+        </div>
+        <div class="fp-presets">
+          <button type="button" class="fp-preset" onclick="setRSI(0,30)">Oversold &lt;30</button>
+          <button type="button" class="fp-preset" onclick="setRSI(70,100)">Overbought &gt;70</button>
+          <button type="button" class="fp-preset" onclick="setRSI(40,60)">Neutral</button>
+        </div>
+      </div>
+
+      <div class="fp-section">
+        <div class="fp-title">PRICE ($)</div>
+        <div class="fp-row">
+          <div class="fp-field">
+            <label class="field-label">MIN</label>
+            <input type="number" name="price_min" class="fp-input" placeholder="e.g. 1" min="0" step="0.01"
+              value="{{ filters.get('price_min', '') if filters else '' }}" />
+          </div>
+          <span class="fp-sep">—</span>
+          <div class="fp-field">
+            <label class="field-label">MAX</label>
+            <input type="number" name="price_max" class="fp-input" placeholder="e.g. 500" min="0" step="0.01"
+              value="{{ filters.get('price_max', '') if filters else '' }}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="fp-section">
+        <div class="fp-title">DAILY CHANGE (%)</div>
+        <div class="fp-row">
+          <div class="fp-field">
+            <label class="field-label">MIN %</label>
+            <input type="number" name="change_pct_min" class="fp-input" placeholder="e.g. -5" step="0.1"
+              value="{{ filters.get('change_pct_min', '') if filters else '' }}" />
+          </div>
+          <span class="fp-sep">—</span>
+          <div class="fp-field">
+            <label class="field-label">MAX %</label>
+            <input type="number" name="change_pct_max" class="fp-input" placeholder="e.g. 5" step="0.1"
+              value="{{ filters.get('change_pct_max', '') if filters else '' }}" />
+          </div>
+        </div>
+        <div class="fp-presets">
+          <button type="button" class="fp-preset" onclick="setChg(2,100)">Gainers &gt;2%</button>
+          <button type="button" class="fp-preset" onclick="setChg(-100,-2)">Losers &lt;-2%</button>
+        </div>
+      </div>
+
+      <div class="fp-section">
+        <div class="fp-title">SMA 20 POSITION</div>
+        <div class="fp-field">
+          <select name="sma_position" class="fp-input">
+            <option value="" {% if not filters or not filters.get('sma_position') %}selected{% endif %}>Any</option>
+            <option value="above" {% if filters and filters.get('sma_position') == 'above' %}selected{% endif %}>Price Above SMA 20</option>
+            <option value="below" {% if filters and filters.get('sma_position') == 'below' %}selected{% endif %}>Price Below SMA 20</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fp-section">
+        <div class="fp-title">SIGNAL FILTER</div>
+        <div class="fp-field">
+          <select name="signal_filter" class="fp-input">
+            <option value="" {% if not filters or not filters.get('signal') %}selected{% endif %}>Any Signal</option>
+            <option value="BUY" {% if filters and filters.get('signal') == 'BUY' %}selected{% endif %}>BUY (any)</option>
+            <option value="STRONG BUY" {% if filters and filters.get('signal') == 'STRONG BUY' %}selected{% endif %}>STRONG BUY</option>
+            <option value="HOLD" {% if filters and filters.get('signal') == 'HOLD' %}selected{% endif %}>HOLD</option>
+            <option value="SELL" {% if filters and filters.get('signal') == 'SELL' %}selected{% endif %}>SELL (any)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="fp-section">
+        <div class="fp-title">CUSTOM TICKERS <span class="label-hint">(optional)</span></div>
+        <textarea name="custom_tickers" class="fp-textarea" placeholder="Leave blank to use default universe ({{ default_count }} tickers)&#10;Or enter your own: AAPL TSLA NVDA GOOGL…" rows="3">{{ custom_tickers or '' }}</textarea>
+      </div>
+
+      <button type="submit" class="btn-primary btn-full" id="screenBtn">
+        <span id="screenBtnText">RUN SCREENER →</span>
+      </button>
+      <button type="button" class="btn-outline btn-block mt-1" onclick="clearFilters()">CLEAR ALL FILTERS</button>
+    </form>
+  </div>
+
+  <!-- Results Panel -->
+  <div class="results-panel">
+    {% if ran %}
+      {% if results %}
+      <div class="screener-results-header">
+        <span class="srh-count">{{ results|length }} stock{% if results|length != 1 %}s{% endif %} matched your filters</span>
+        <span class="srh-hint">Click a ticker to analyze it in detail.</span>
+      </div>
+      <div class="screener-table-wrap">
+        <table class="screener-table">
+          <thead>
+            <tr>
+              <th>TICKER</th>
+              <th>COMPANY</th>
+              <th>PRICE</th>
+              <th>CHANGE</th>
+              <th>RSI</th>
+              <th>SMA 20</th>
+              <th>SIGNAL</th>
+              <th>SECTOR</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in results %}
+            <tr class="scr-row">
+              <td class="scr-ticker"><a href="{{ url_for('stock.analyze') }}?ticker={{ r.ticker }}" class="ticker-link">{{ r.ticker }}</a></td>
+              <td class="scr-name">{{ r.company_name[:24] }}{% if r.company_name|length > 24 %}…{% endif %}</td>
+              <td class="scr-price">${{ "%.2f"|format(r.current_price) }}</td>
+              <td class="scr-change {{ 'pos' if r.change_pct >= 0 else 'neg' }}">{{ '+' if r.change_pct >= 0 else '' }}{{ "%.2f"|format(r.change_pct) }}%</td>
+              <td class="scr-rsi {{ 'oversold' if r.rsi and r.rsi < 30 else 'overbought' if r.rsi and r.rsi > 70 else '' }}">{{ r.rsi or '—' }}</td>
+              <td class="scr-sma">${{ "%.2f"|format(r.sma20) if r.sma20 else '—' }}</td>
+              <td><span class="signal-pill signal-{{ r.signal_color }}">{{ r.signal }}</span></td>
+              <td class="scr-sector">{{ r.sector or '—' }}</td>
+              <td><a href="{{ url_for('stock.analyze') }}?ticker={{ r.ticker }}" class="act-btn act-analyze">→</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-screener">
+        <div class="ea-icon">⧉</div>
+        <h2>No Stocks Matched</h2>
+        <p>No stocks in the universe passed all your filters. Try loosening the criteria.</p>
+      </div>
+      {% endif %}
+    {% else %}
+    <div class="screener-intro">
+      <div class="si-icon">⧉</div>
+      <h2>Find Your Next Trade</h2>
+      <p>Set your technical filters on the left and click <strong>Run Screener</strong> to scan {{ default_count }}+ stocks instantly.</p>
+      <div class="si-examples">
+        <div class="sie-card" onclick="setPreset('oversold')">
+          <div class="siec-title">🟢 Oversold Stocks</div>
+          <div class="siec-desc">RSI below 30 — potential bounce candidates</div>
+        </div>
+        <div class="sie-card" onclick="setPreset('momentum')">
+          <div class="siec-title">🚀 Momentum Stocks</div>
+          <div class="siec-desc">Up 2%+ today, price above SMA 20</div>
+        </div>
+        <div class="sie-card" onclick="setPreset('value')">
+          <div class="siec-title">💎 Value Zone</div>
+          <div class="siec-desc">RSI 30–50, price below SMA 20</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setRSI(min, max) {
+  document.querySelector('[name="rsi_min"]').value = min;
+  document.querySelector('[name="rsi_max"]').value = max;
+}
+function setChg(min, max) {
+  document.querySelector('[name="change_pct_min"]').value = min;
+  document.querySelector('[name="change_pct_max"]').value = max;
+}
+function clearFilters() {
+  document.getElementById('screenerForm').reset();
+}
+function setPreset(preset) {
+  clearFilters();
+  if (preset === 'oversold') { setRSI(0, 30); }
+  else if (preset === 'momentum') { setChg(2, 100); document.querySelector('[name="sma_position"]').value = 'above'; }
+  else if (preset === 'value') { setRSI(30, 50); document.querySelector('[name="sma_position"]').value = 'below'; }
+  document.getElementById('screenerForm').submit();
+}
+document.getElementById('screenerForm').addEventListener('submit', () => {
+  document.getElementById('screenBtnText').textContent = 'SCANNING…';
+});
+</script>
+{% endblock %}

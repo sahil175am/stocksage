@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">MARKET OVERVIEW</h1>
+    <p class="page-subtitle">Welcome back, <span class="accent">{{ current_user.username }}</span> — here's your terminal.</p>
+  </div>
+  <div class="page-header-right">
+    <span class="live-badge">● LIVE</span>
+    <span class="market-time" id="marketTime"></span>
+  </div>
+</div>
+
+<!-- Market Index Cards -->
+<div class="index-grid">
+  <div class="index-card" id="card-spy">
+    <div class="ic-label">S&amp;P 500 <span class="ic-ticker">SPY</span></div>
+    <div class="ic-price" id="idx-spy-price">Loading…</div>
+    <div class="ic-change" id="idx-spy-change">—</div>
+  </div>
+  <div class="index-card" id="card-qqq">
+    <div class="ic-label">NASDAQ <span class="ic-ticker">QQQ</span></div>
+    <div class="ic-price" id="idx-qqq-price">Loading…</div>
+    <div class="ic-change" id="idx-qqq-change">—</div>
+  </div>
+  <div class="index-card" id="card-dia">
+    <div class="ic-label">DOW JONES <span class="ic-ticker">DIA</span></div>
+    <div class="ic-price" id="idx-dia-price">Loading…</div>
+    <div class="ic-change" id="idx-dia-change">—</div>
+  </div>
+  <div class="index-card" id="card-btc">
+    <div class="ic-label">BITCOIN <span class="ic-ticker">BTC-USD</span></div>
+    <div class="ic-price" id="idx-btc-price">Loading…</div>
+    <div class="ic-change" id="idx-btc-change">—</div>
+  </div>
+</div>
+
+<!-- Main dashboard grid -->
+<div class="dash-grid">
+
+  <!-- Quick Analyze -->
+  <div class="dash-card dash-analyze">
+    <div class="card-header">
+      <span class="card-title">QUICK ANALYZE</span>
+      <span class="card-icon">◎</span>
+    </div>
+    <form action="{{ url_for('stock.analyze') }}" method="POST" class="quick-form">
+      <div class="qf-wrap">
+        <input type="text" name="ticker" class="qf-input" placeholder="Enter ticker symbol e.g. AAPL, TSLA, MSFT…"
+               maxlength="10" autocomplete="off" required />
+        <button type="submit" class="qf-btn">ANALYZE →</button>
+      </div>
+    </form>
+    <div class="popular-tickers">
+      <span class="pt-label">Popular:</span>
+      {% for t in ['AAPL','TSLA','MSFT','NVDA','GOOGL','AMZN'] %}
+      <a href="{{ url_for('stock.analyze') }}?ticker={{ t }}" class="pt-chip">{{ t }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Portfolio summary -->
+  <div class="dash-card dash-portfolio-summary">
+    <div class="card-header">
+      <span class="card-title">YOUR PORTFOLIO</span>
+      <span class="card-icon">▦</span>
+    </div>
+    {% if portfolio_count > 0 %}
+    <div class="port-stat">
+      <span class="ps-num">{{ portfolio_count }}</span>
+      <span class="ps-label">Active Position{% if portfolio_count != 1 %}s{% endif %}</span>
+    </div>
+    <a href="{{ url_for('portfolio.view') }}" class="btn-outline btn-block mt-2">VIEW PORTFOLIO →</a>
+    {% else %}
+    <p class="empty-hint">No positions yet. Start building your portfolio!</p>
+    <a href="{{ url_for('portfolio.view') }}" class="btn-outline btn-block mt-2">ADD FIRST STOCK →</a>
+    {% endif %}
+  </div>
+
+  <!-- Watchlist -->
+  <div class="dash-card dash-watchlist">
+    <div class="card-header">
+      <span class="card-title">WATCHLIST</span>
+      <span class="card-icon">◉</span>
+    </div>
+    {% if watchlist %}
+    <div class="watchlist-items" id="watchlistItems">
+      {% for item in watchlist %}
+      <div class="wl-item" data-ticker="{{ item.ticker }}">
+        <div class="wl-left">
+          <span class="wl-ticker">{{ item.ticker }}</span>
+          <span class="wl-name">{{ item.company_name or item.ticker }}</span>
+        </div>
+        <div class="wl-right">
+          <span class="wl-price" id="wl-{{ item.ticker }}">—</span>
+          <a href="{{ url_for('stock.analyze') }}?ticker={{ item.ticker }}" class="wl-analyze">→</a>
+          <form action="{{ url_for('stock.remove_from_watchlist', item_id=item.id) }}" method="POST" style="display:inline">
+            <button type="submit" class="wl-remove" title="Remove">✕</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-hint">Your watchlist is empty. Analyze a stock and add it!</p>
+    {% endif %}
+  </div>
+
+  <!-- Latest News Preview -->
+  <div class="dash-card dash-news-preview">
+    <div class="card-header">
+      <span class="card-title">MARKET PULSE</span>
+      <span class="card-icon">◈</span>
+    </div>
+    <div id="dashNewsItems">
+      <div class="loading-dots"><span></span><span></span><span></span></div>
+    </div>
+    <a href="{{ url_for('news.index') }}" class="btn-outline btn-block mt-2">ALL NEWS →</a>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Load index prices
+  const indices = ['SPY','QQQ','DIA','BTC-USD'];
+  indices.forEach(ticker => {
+    fetch(`/stock/api/chart/${ticker}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.prices && d.prices.length) {
+          const price = d.prices[d.prices.length-1];
+          const prev = d.prices[d.prices.length-2] || price;
+          const chg = ((price-prev)/prev*100).toFixed(2);
+          const key = ticker.replace('-','').replace('^','').toLowerCase();
+          const safe = ticker === 'DIA' ? 'dia' : ticker === 'BTC-USD' ? 'btc' : ticker.toLowerCase();
+          const el = document.getElementById(`idx-${safe}-price`);
+          const elc = document.getElementById(`idx-${safe}-change`);
+          if(el) el.textContent = `$${price.toLocaleString()}`;
+          if(elc) {
+            elc.textContent = `${chg >= 0 ? '+' : ''}${chg}%`;
+            elc.className = `ic-change ${chg >= 0 ? 'pos' : 'neg'}`;
+          }
+          const card = document.getElementById(`card-${safe}`);
+          if(card) card.classList.add(chg >= 0 ? 'card-up' : 'card-down');
+        }
+      }).catch(()=>{});
+  });
+
+  // Watchlist prices
+  document.querySelectorAll('.wl-item').forEach(item => {
+    const ticker = item.dataset.ticker;
+    fetch(`/stock/api/chart/${ticker}`)
+      .then(r => r.json())
+      .then(d => {
+        if(d.prices && d.prices.length) {
+          const el = document.getElementById(`wl-${ticker}`);
+          if(el) el.textContent = `$${d.prices[d.prices.length-1].toLocaleString()}`;
+        }
+      }).catch(()=>{});
+  });
+
+  // Dashboard news preview
+  fetch('/news/api/market')
+    .then(r => r.json())
+    .then(articles => {
+      const container = document.getElementById('dashNewsItems');
+      if(!articles.length) { container.innerHTML = '<p class="empty-hint">No news available.</p>'; return; }
+      container.innerHTML = articles.slice(0,4).map(a => `
+        <div class="dash-news-item">
+          <a href="${a.link}" target="_blank" rel="noopener" class="dni-title">${a.title}</a>
+          <div class="dni-meta"><span>${a.source}</span><span>${a.published}</span></div>
+        </div>
+      `).join('');
+    }).catch(()=>{ document.getElementById('dashNewsItems').innerHTML = '<p class="empty-hint">Could not load news.</p>'; });
+
+  // Market time
+  function updateTime() {
+    const now = new Date();
+    document.getElementById('marketTime').textContent = now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }
+  setInterval(updateTime, 1000); updateTime();
+</script>
+{% endblock %}

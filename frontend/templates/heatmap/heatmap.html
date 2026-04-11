@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Sector Heatmap — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">SECTOR HEATMAP</h1>
+    <p class="page-subtitle">Live performance of all 12 market sectors — powered by free ETF data.</p>
+  </div>
+  <div class="page-header-right">
+    <span class="live-badge">● LIVE</span>
+    <button class="btn-outline btn-sm" onclick="loadHeatmap()">↻ REFRESH</button>
+  </div>
+</div>
+
+<!-- Heatmap Grid -->
+<div id="heatmapGrid" class="heatmap-grid">
+  {% for sector in sectors %}
+  <div class="hm-cell loading-cell" id="cell-{{ loop.index }}" data-sector="{{ sector }}">
+    <div class="hmc-sector">{{ sector }}</div>
+    <div class="hmc-price">—</div>
+    <div class="hmc-change">Loading…</div>
+    <div class="hmc-rsi"></div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Legend -->
+<div class="heatmap-legend">
+  <div class="hl-item"><span class="hl-swatch" style="background:rgba(0,255,136,0.8)"></span> Strong up (&gt;2%)</div>
+  <div class="hl-item"><span class="hl-swatch" style="background:rgba(0,255,136,0.35)"></span> Up (0–2%)</div>
+  <div class="hl-item"><span class="hl-swatch" style="background:rgba(148,163,184,0.1)"></span> Flat</div>
+  <div class="hl-item"><span class="hl-swatch" style="background:rgba(239,68,68,0.35)"></span> Down (0–2%)</div>
+  <div class="hl-item"><span class="hl-swatch" style="background:rgba(239,68,68,0.8)"></span> Strong down (&lt;-2%)</div>
+</div>
+
+<!-- Sector detail panel -->
+<div id="sectorDetail" class="sector-detail" style="display:none">
+  <div class="sd-header">
+    <span class="sd-title" id="sdTitle">Sector Stocks</span>
+    <button class="modal-close" onclick="document.getElementById('sectorDetail').style.display='none'">✕</button>
+  </div>
+  <div id="sdStocks" class="sd-stocks">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadHeatmap() {
+  fetch('/heatmap/api/data')
+    .then(r => r.json())
+    .then(sectors => {
+      sectors.forEach((s, i) => {
+        const cell = document.querySelector(`[data-sector="${s.sector}"]`);
+        if (!cell) return;
+        const chg = s.change_pct || 0;
+        cell.classList.remove('loading-cell');
+
+        // Color intensity based on change %
+        let bg;
+        if      (chg >=  2) bg = 'rgba(0,255,136,0.75)';
+        else if (chg >   0) bg = `rgba(0,255,136,${0.15 + chg * 0.15})`;
+        else if (chg <= -2) bg = 'rgba(239,68,68,0.75)';
+        else if (chg <   0) bg = `rgba(239,68,68,${0.15 + Math.abs(chg) * 0.15})`;
+        else                 bg = 'rgba(148,163,184,0.08)';
+
+        const textCol = chg > 0.5 ? '#00ff88' : chg < -0.5 ? '#ef4444' : '#94a3b8';
+        cell.style.background = bg;
+        cell.innerHTML = `
+          <div class="hmc-etf">${s.etf}</div>
+          <div class="hmc-sector">${s.sector}</div>
+          <div class="hmc-price">$${s.price.toFixed(2)}</div>
+          <div class="hmc-change" style="color:${textCol}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</div>
+          <div class="hmc-rsi">${s.rsi ? 'RSI ' + s.rsi : ''}</div>
+        `;
+        cell.style.cursor = 'pointer';
+        cell.onclick = () => showSector(s.sector);
+      });
+    })
+    .catch(() => {
+      document.getElementById('heatmapGrid').innerHTML = '<p class="empty-hint" style="padding:2rem">Could not load sector data. Please try again.</p>';
+    });
+}
+
+function showSector(sectorName) {
+  const detail = document.getElementById('sectorDetail');
+  document.getElementById('sdTitle').textContent = sectorName.toUpperCase() + ' — TOP STOCKS';
+  document.getElementById('sdStocks').innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  detail.style.display = 'block';
+
+  fetch(`/heatmap/api/sector/${encodeURIComponent(sectorName)}`)
+    .then(r => r.json())
+    .then(stocks => {
+      document.getElementById('sdStocks').innerHTML = stocks.map(s => {
+        const chg = s.change_pct || 0;
+        const col = chg >= 0 ? 'var(--accent)' : 'var(--red)';
+        return `
+          <div class="sd-stock-row">
+            <a href="/stock/analyze?ticker=${s.ticker}" class="sds-ticker">${s.ticker}</a>
+            <span class="sds-name">${s.company_name}</span>
+            <span class="sds-price">$${s.price.toFixed(2)}</span>
+            <span class="sds-change" style="color:${col}">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</span>
+            <span class="sds-rsi">${s.rsi ? 'RSI ' + s.rsi : ''}</span>
+          </div>`;
+      }).join('');
+    });
+}
+
+loadHeatmap();
+</script>
+{% endblock %}

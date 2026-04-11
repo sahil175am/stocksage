@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Compare Stocks — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">STOCK COMPARISON</h1>
+    <p class="page-subtitle">Compare two stocks side-by-side — technicals, fundamentals, and price charts.</p>
+  </div>
+</div>
+
+<form action="{{ url_for('compare.index') }}" method="POST" class="compare-search-row">
+  <div class="csr-field">
+    <label class="field-label">TICKER 1</label>
+    <div class="field-wrap">
+      <span class="field-icon" style="color:var(--accent)">◉</span>
+      <input type="text" name="ticker1" class="field-input" placeholder="e.g. AAPL"
+        value="{{ ticker1 or '' }}" maxlength="10" required autocomplete="off" />
+    </div>
+  </div>
+  <div class="csr-vs">VS</div>
+  <div class="csr-field">
+    <label class="field-label">TICKER 2</label>
+    <div class="field-wrap">
+      <span class="field-icon" style="color:var(--amber)">◉</span>
+      <input type="text" name="ticker2" class="field-input" placeholder="e.g. MSFT"
+        value="{{ ticker2 or '' }}" maxlength="10" required autocomplete="off" />
+    </div>
+  </div>
+  <button type="submit" class="btn-primary">COMPARE →</button>
+</form>
+
+<div class="compare-pairs mb-2">
+  <span class="pt-label">Quick pairs:</span>
+  {% for t1, t2 in [('AAPL','MSFT'),('TSLA','RIVN'),('NVDA','AMD'),('GOOGL','META'),('BTC-USD','ETH-USD')] %}
+  <a href="{{ url_for('compare.index') }}?t1={{ t1 }}&t2={{ t2 }}" class="pt-chip">{{ t1 }} vs {{ t2 }}</a>
+  {% endfor %}
+</div>
+
+{% if error1 %}<div class="error-card"><span class="ec-icon">⚠</span><div><p>{{ error1 }}</p></div></div>{% endif %}
+{% if error2 %}<div class="error-card"><span class="ec-icon">⚠</span><div><p>{{ error2 }}</p></div></div>{% endif %}
+
+{% if data1 and data2 %}
+<div class="compare-headers">
+  <div class="cmp-header">
+    <div class="cmp-ticker">{{ data1.ticker }}</div>
+    <div class="cmp-name">{{ data1.company_name }}</div>
+    <div class="cmp-price">${{ "%.2f"|format(data1.current_price) }}</div>
+    <div class="cmp-change {{ 'pos' if data1.change >= 0 else 'neg' }}">{{ '+' if data1.change >= 0 else '' }}{{ "%.2f"|format(data1.change_pct) }}% today</div>
+  </div>
+  <div class="cmp-divider">⇌</div>
+  <div class="cmp-header">
+    <div class="cmp-ticker" style="color:var(--amber)">{{ data2.ticker }}</div>
+    <div class="cmp-name">{{ data2.company_name }}</div>
+    <div class="cmp-price">${{ "%.2f"|format(data2.current_price) }}</div>
+    <div class="cmp-change {{ 'pos' if data2.change >= 0 else 'neg' }}">{{ '+' if data2.change >= 0 else '' }}{{ "%.2f"|format(data2.change_pct) }}% today</div>
+  </div>
+</div>
+
+<div class="chart-card mb-2">
+  <div class="chart-card-header">
+    <span class="cch-title">NORMALIZED PRICE RETURN — LAST 20 DAYS (% change from day 1)</span>
+    <div style="display:flex;gap:1rem;align-items:center">
+      <span style="width:12px;height:12px;background:var(--accent);border-radius:50%;display:inline-block"></span><span style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-secondary)">{{ data1.ticker }}</span>
+      <span style="width:12px;height:12px;background:var(--amber);border-radius:50%;display:inline-block"></span><span style="font-family:var(--font-mono);font-size:0.7rem;color:var(--text-secondary)">{{ data2.ticker }}</span>
+    </div>
+  </div>
+  <div style="height:260px"><canvas id="compareChart"></canvas></div>
+</div>
+
+<div class="cmp-table-wrap mb-2">
+  <table class="cmp-table">
+    <thead>
+      <tr>
+        <th>METRIC</th>
+        <th style="color:var(--accent)">{{ data1.ticker }}</th>
+        <th style="color:var(--amber)">{{ data2.ticker }}</th>
+        <th>EDGE</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set rows = [
+        ('Current Price ($)', data1.current_price, data2.current_price, True),
+        ('Today Change (%)', data1.change_pct, data2.change_pct, True),
+        ('RSI (14)', data1.rsi, data2.rsi, False),
+        ('SMA 20 ($)', data1.sma20, data2.sma20, True),
+        ('P/E Ratio', data1.pe_ratio, data2.pe_ratio, False),
+        ('Beta', data1.beta, data2.beta, False),
+      ] %}
+      {% for label, v1, v2, higher_better in rows %}
+      <tr>
+        <td class="cmt-label">{{ label }}</td>
+        <td class="cmt-val">{{ "%.2f"|format(v1) if v1 is not none else '—' }}</td>
+        <td class="cmt-val">{{ "%.2f"|format(v2) if v2 is not none else '—' }}</td>
+        <td class="cmt-edge">
+          {% if v1 is not none and v2 is not none %}
+            {% if higher_better %}
+              {% if v1 > v2 %}<span style="color:var(--accent)">{{ data1.ticker }}</span>{% else %}<span style="color:var(--amber)">{{ data2.ticker }}</span>{% endif %}
+            {% else %}
+              {% if v1 < v2 %}<span style="color:var(--accent)">{{ data1.ticker }}</span>{% else %}<span style="color:var(--amber)">{{ data2.ticker }}</span>{% endif %}
+            {% endif %}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td class="cmt-label">Market Cap</td>
+        <td class="cmt-val">{{ data1.market_cap | format_large_num }}</td>
+        <td class="cmt-val">{{ data2.market_cap | format_large_num }}</td>
+        <td class="cmt-edge">{% if data1.market_cap and data2.market_cap %}{% if data1.market_cap > data2.market_cap %}<span style="color:var(--accent)">{{ data1.ticker }}</span>{% else %}<span style="color:var(--amber)">{{ data2.ticker }}</span>{% endif %}{% else %}—{% endif %}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="cmp-signals-row">
+  <div class="cmp-signal-box" id="sig1"><div class="loading-dots"><span></span><span></span><span></span></div></div>
+  <div class="cmp-signal-box" id="sig2"><div class="loading-dots"><span></span><span></span><span></span></div></div>
+</div>
+
+{% elif not error1 and not error2 %}
+<div class="empty-analyze" style="margin-top:3rem">
+  <div class="ea-icon">⇌</div>
+  <h2>Select Two Tickers to Compare</h2>
+  <p>Enter any two valid ticker symbols above to see a detailed side-by-side comparison.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if data1 and data2 %}
+<script>
+const T1 = "{{ data1.ticker }}", T2 = "{{ data2.ticker }}";
+fetch(`/compare/api/chart?t1=${T1}&t2=${T2}`)
+  .then(r => r.json())
+  .then(d => {
+    if (!d.t1 || !d.t2) return;
+    const norm = arr => arr.map((v,i) => v != null ? +((v - arr[0]) / arr[0] * 100).toFixed(2) : null);
+    const ctx = document.getElementById('compareChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: d.t1.dates,
+        datasets: [
+          { label: T1, data: norm(d.t1.prices), borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,0.06)', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true },
+          { label: T2, data: norm(d.t2.prices), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.06)', borderWidth: 2, pointRadius: 3, tension: 0.3, fill: true }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#9ca3af', font: { family: 'Share Tech Mono', size: 11 } } },
+          tooltip: { backgroundColor: '#0d1117', borderColor: '#2a3f55', borderWidth: 1, titleColor: '#9ca3af', bodyColor: '#e5e7eb',
+            callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y > 0 ? '+' : ''}${ctx.parsed.y}%` } }
+        },
+        scales: {
+          x: { ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 } }, grid: { color: '#1f2937' } },
+          y: { ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 }, callback: v => `${v > 0 ? '+' : ''}${v}%` }, grid: { color: '#1f2937' } }
+        }
+      }
+    });
+  });
+
+[['sig1', T1, 'var(--accent)'], ['sig2', T2, 'var(--amber)']].forEach(([id, ticker, color]) => {
+  fetch(`/stock/api/signal/${ticker}`)
+    .then(r => r.json())
+    .then(s => {
+      document.getElementById(id).innerHTML = `
+        <div style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:2px;color:var(--text-muted);margin-bottom:0.5rem">${ticker} SIGNAL</div>
+        <div class="sc-signal sc-${s.color}" style="justify-content:center;padding:0.75rem">
+          <span>${s.emoji}</span><span class="sc-label">${s.signal}</span>
+        </div>
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.6rem;line-height:1.5">${s.summary}</p>
+      `;
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

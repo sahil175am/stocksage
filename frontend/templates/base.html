@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ current_user.theme if current_user.is_authenticated else 'dark' }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}StockSage{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+  <!-- PWA -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}" />
+  <meta name="theme-color" content="#00ff88" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="StockSage" />
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <div class="scanlines" aria-hidden="true"></div>
+
+  {% if current_user.is_authenticated %}
+  <nav class="navbar">
+    <div class="nav-brand">
+      <span class="brand-icon">◈</span>
+      <span class="brand-name">STOCK<span class="brand-accent">SAGE</span></span>
+      <span class="brand-tag">MARKET INTELLIGENCE</span>
+    </div>
+
+    <div class="nav-ticker-bar" id="tickerBar">
+      <span class="ticker-item"><span class="t-sym">SPY</span> <span class="t-price" id="nb-spy">—</span></span>
+      <span class="ticker-item"><span class="t-sym">QQQ</span> <span class="t-price" id="nb-qqq">—</span></span>
+      <span class="ticker-item"><span class="t-sym">DIA</span> <span class="t-price" id="nb-dia">—</span></span>
+      <span class="ticker-item"><span class="t-sym">BTC-USD</span> <span class="t-price" id="nb-btc">—</span></span>
+    </div>
+
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard.home') }}" class="nav-link {% if request.endpoint == 'dashboard.home' %}active{% endif %}">
+        <span class="nl-icon">⬡</span> Dashboard
+      </a>
+      <a href="{{ url_for('stock.analyze') }}" class="nav-link {% if request.endpoint == 'stock.analyze' %}active{% endif %}">
+        <span class="nl-icon">◎</span> Analyze
+      </a>
+      <a href="{{ url_for('compare.index') }}" class="nav-link {% if request.endpoint == 'compare.index' %}active{% endif %}">
+        <span class="nl-icon">⇌</span> Compare
+      </a>
+      <a href="{{ url_for('portfolio.view') }}" class="nav-link {% if request.endpoint == 'portfolio.view' %}active{% endif %}">
+        <span class="nl-icon">▦</span> Portfolio
+      </a>
+      <a href="{{ url_for('news.index') }}" class="nav-link {% if request.endpoint == 'news.index' %}active{% endif %}">
+        <span class="nl-icon">◈</span> News
+      </a>
+      <a href="{{ url_for('screener.index') }}" class="nav-link {% if request.endpoint == 'screener.index' %}active{% endif %}">
+        <span class="nl-icon">⧉</span> Screener
+      </a>
+      <a href="{{ url_for('heatmap.index') }}" class="nav-link {% if request.endpoint == 'heatmap.index' %}active{% endif %}">
+        <span class="nl-icon">▦</span> Heatmap
+      </a>
+      {% if current_user.is_admin %}
+      <a href="{{ url_for('admin.dashboard') }}" class="nav-link nav-admin {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+        <span class="nl-icon">★</span> Admin
+      </a>
+      {% endif %}
+
+      <!-- Theme toggle -->
+      <button class="theme-toggle" id="themeToggleBtn" title="Toggle theme" onclick="toggleTheme()">
+        <span id="themeIcon">{% if current_user.theme == 'light' %}☀{% else %}◑{% endif %}</span>
+      </button>
+
+      <div class="nav-user">
+        <a href="{{ url_for('profile.settings') }}" class="user-badge" title="Settings">{{ current_user.username[:2].upper() }}</a>
+        <span class="user-name">{{ current_user.username }}</span>
+        <a href="{{ url_for('auth.logout') }}" class="logout-btn">LOGOUT</a>
+      </div>
+    </div>
+  </nav>
+  {% endif %}
+
+  <div class="flash-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">
+        <span class="flash-icon">{% if category == 'success' %}✓{% elif category == 'danger' %}✕{% else %}ℹ{% endif %}</span>
+        {{ message }}
+        <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+      </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <main class="main-content {% if not current_user.is_authenticated %}auth-layout{% endif %}">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <span>STOCKSAGE v2.1 &nbsp;|&nbsp; DATA: YAHOO FINANCE &nbsp;|&nbsp; AI: ANTHROPIC &nbsp;|&nbsp;</span>
+    <span class="footer-disclaimer">NOT FINANCIAL ADVICE. FOR EDUCATIONAL PURPOSES ONLY.</span>
+    <span class="footer-time" id="footerTime"></span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

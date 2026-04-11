@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+{% block title %}{% if ticker %}{{ ticker }} Analysis{% else %}Analyze Stock{% endif %} — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">STOCK ANALYZER</h1>
+    <p class="page-subtitle">Enter any ticker symbol for real-time analysis and AI insights.</p>
+  </div>
+</div>
+
+<!-- Search bar -->
+<div class="analyze-search-bar">
+  <form action="{{ url_for('stock.analyze') }}" method="POST" class="search-form">
+    <input type="text" name="ticker" class="search-input" placeholder="Enter ticker symbol (e.g. AAPL, TSLA, NVDA, BTC-USD…)"
+      value="{{ ticker or '' }}" maxlength="15" autocomplete="off" autofocus />
+    <button type="submit" class="search-btn">ANALYZE →</button>
+  </form>
+</div>
+
+{% if error %}
+<div class="error-card">
+  <span class="ec-icon">⚠</span>
+  <div>
+    <strong>Ticker Not Found</strong>
+    <p>{{ error }}</p>
+  </div>
+</div>
+{% endif %}
+
+{% if data %}
+<!-- ======= STOCK HEADER ======= -->
+<div class="stock-header">
+  <div class="sh-left">
+    <div class="sh-ticker">{{ data.ticker }}</div>
+    <div class="sh-name">{{ data.company_name }}</div>
+    <div class="sh-meta">
+      {% if data.sector and data.sector != 'N/A' %}<span class="meta-tag">{{ data.sector }}</span>{% endif %}
+      {% if data.industry and data.industry != 'N/A' %}<span class="meta-tag">{{ data.industry }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="sh-right">
+    <div class="sh-price">${{ "%.2f"|format(data.current_price) }}</div>
+    <div class="sh-change {{ 'pos' if data.change >= 0 else 'neg' }}">
+      {{ '+' if data.change >= 0 else '' }}{{ "%.2f"|format(data.change) }}
+      ({{ '+' if data.change_pct >= 0 else '' }}{{ "%.2f"|format(data.change_pct) }}%)
+    </div>
+    <!-- Watchlist add button -->
+    <form id="watchlistForm">
+      <input type="hidden" name="ticker" value="{{ data.ticker }}" />
+      <input type="hidden" name="company_name" value="{{ data.company_name }}" />
+      <button type="submit" class="btn-outline btn-sm mt-1" id="watchlistBtn">+ ADD TO WATCHLIST</button>
+    </form>
+  </div>
+</div>
+
+<!-- ======= KEY METRICS ======= -->
+<div class="metrics-row">
+  <div class="metric-box">
+    <span class="mb-label">MARKET CAP</span>
+    <span class="mb-val">{{ data.market_cap | format_large_num if data.market_cap else '—' }}</span>
+  </div>
+  <div class="metric-box">
+    <span class="mb-label">P/E RATIO</span>
+    <span class="mb-val">{{ "%.2f"|format(data.pe_ratio) if data.pe_ratio else '—' }}</span>
+  </div>
+  <div class="metric-box">
+    <span class="mb-label">RSI (14)</span>
+    <span class="mb-val rsi-val {{ 'oversold' if data.rsi and data.rsi < 30 else 'overbought' if data.rsi and data.rsi > 70 else '' }}">
+      {{ data.rsi or '—' }}
+    </span>
+  </div>
+  <div class="metric-box">
+    <span class="mb-label">SMA 20</span>
+    <span class="mb-val">${{ "%.2f"|format(data.sma20) if data.sma20 else '—' }}</span>
+  </div>
+  <div class="metric-box">
+    <span class="mb-label">52W HIGH</span>
+    <span class="mb-val pos">${{ "%.2f"|format(data.week_52_high) if data.week_52_high else '—' }}</span>
+  </div>
+  <div class="metric-box">
+    <span class="mb-label">52W LOW</span>
+    <span class="mb-val neg">${{ "%.2f"|format(data.week_52_low) if data.week_52_low else '—' }}</span>
+  </div>
+  <div class="metric-box">
+    <span class="mb-label">VOLUME</span>
+    <span class="mb-val">{{ data.volume | format_large_num if data.volume else '—' }}</span>
+  </div>
+  <div class="metric-box">
+    <span class="mb-label">BETA</span>
+    <span class="mb-val">{{ "%.2f"|format(data.beta) if data.beta else '—' }}</span>
+  </div>
+</div>
+
+<!-- ======= MAIN GRID ======= -->
+<div class="analysis-grid">
+
+  <!-- Chart Column -->
+  <div class="chart-column">
+    <!-- Price + SMA Chart -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="cch-title">PRICE CHART — LAST 20–30 DAYS</span>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <span class="cch-badge">{{ data.ticker }}</span>
+          <div class="chart-type-tabs">
+            <button class="ctt-btn active" id="tab-line" onclick="switchChart('line')">LINE</button>
+            <button class="ctt-btn" id="tab-candle" onclick="switchChart('candle')">CANDLE</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-wrap" id="priceChartWrap">
+        <canvas id="priceChart"></canvas>
+      </div>
+      <div class="chart-wrap" id="candleChartWrap" style="display:none">
+        <canvas id="candleChart"></canvas>
+      </div>
+    </div>
+
+    <!-- RSI Chart -->
+    <div class="chart-card">
+      <div class="chart-card-header">
+        <span class="cch-title">RSI (14) — LAST 20 TRADING DAYS</span>
+        <span class="cch-badge rsi-badge">Relative Strength Index</span>
+      </div>
+      <div class="chart-wrap chart-wrap-sm">
+        <canvas id="rsiChart"></canvas>
+      </div>
+      <div class="rsi-legend">
+        <span class="rsi-zone overbought-zone">Overbought &gt;70</span>
+        <span class="rsi-zone neutral-zone">Neutral 30–70</span>
+        <span class="rsi-zone oversold-zone">Oversold &lt;30</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signal + Insight Column -->
+  <div class="insight-column">
+
+    <!-- Buy/Sell/Hold Signal -->
+    <div class="signal-card" id="signalCard">
+      <div class="sc-loading">
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+        <p>Calculating signal…</p>
+      </div>
+    </div>
+
+    <!-- AI Insight -->
+    <div class="ai-card" id="aiCard">
+      <div class="ai-header">
+        <span class="ai-icon">◈</span>
+        <span class="ai-label">AI INSIGHT</span>
+        <span class="ai-badge">Powered by Claude</span>
+      </div>
+      <div class="ai-body" id="aiBody">
+        <div class="loading-dots"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+
+    <!-- Company description -->
+    {% if data.description %}
+    <div class="desc-card">
+      <div class="dc-header">ABOUT {{ data.company_name }}</div>
+      <p class="dc-text">{{ data.description[:400] }}{% if data.description|length > 400 %}…{% endif %}</p>
+    </div>
+    {% endif %}
+
+    <!-- Quick add to portfolio -->
+    <div class="quick-portfolio-card">
+      <div class="qpc-header">ADD TO PORTFOLIO</div>
+      <form action="{{ url_for('portfolio.add') }}" method="POST" class="qp-form">
+        <input type="hidden" name="ticker" value="{{ data.ticker }}" />
+        <input type="hidden" name="company_name" value="{{ data.company_name }}" />
+        <div class="qp-row">
+          <div class="qp-field">
+            <label>SHARES</label>
+            <input type="number" name="shares" placeholder="e.g. 10" step="0.01" min="0.01" required />
+          </div>
+          <div class="qp-field">
+            <label>BUY PRICE ($)</label>
+            <input type="number" name="buy_price" placeholder="{{ '%.2f'|format(data.current_price) }}" step="0.01" min="0.01"
+              value="{{ '%.2f'|format(data.current_price) }}" required />
+          </div>
+        </div>
+        <input type="text" name="notes" placeholder="Notes (optional)" class="qp-notes" />
+        <button type="submit" class="btn-primary btn-block">ADD TO PORTFOLIO →</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- News Section -->
+<div class="news-section">
+  <div class="card-header mb-2">
+    <span class="card-title">LATEST NEWS — {{ data.ticker }}</span>
+    <span class="card-icon">◈</span>
+  </div>
+  <div id="stockNewsItems">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+  </div>
+</div>
+
+{% else %}
+<!-- Empty state -->
+<div class="empty-analyze">
+  <div class="ea-icon">◎</div>
+  <h2>Enter a Ticker to Begin</h2>
+  <p>Type any valid stock symbol above to get full technical analysis, AI-powered insights, charts, and more.</p>
+  <div class="ea-examples">
+    <span class="ea-label">Try these:</span>
+    {% for t in ['AAPL','TSLA','MSFT','NVDA','GOOGL','AMZN','META','NFLX','BTC-USD','ETH-USD'] %}
+    <a href="{{ url_for('stock.analyze') }}?ticker={{ t }}" class="pt-chip">{{ t }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if data %}
+<script>
+const TICKER = "{{ data.ticker }}";
+
+// Load charts
+fetch(`/stock/api/chart/${TICKER}`)
+  .then(r => r.json())
+  .then(d => {
+    if(d.error) return;
+    renderPriceChart(d);
+    renderRSIChart(d);
+  });
+
+function renderPriceChart(d) {
+  const ctx = document.getElementById('priceChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.dates,
+      datasets: [
+        {
+          label: 'Price',
+          data: d.prices,
+          borderColor: '#00ff88',
+          backgroundColor: 'rgba(0,255,136,0.06)',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: 'SMA 20',
+          data: d.sma20,
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          borderDash: [4,4],
+          tension: 0.3,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#9ca3af', font: { family: 'Share Tech Mono', size: 11 } } },
+        tooltip: {
+          backgroundColor: '#0d1117',
+          borderColor: '#00ff88',
+          borderWidth: 1,
+          titleColor: '#00ff88',
+          bodyColor: '#e5e7eb',
+          callbacks: { label: ctx => ` $${ctx.parsed.y.toFixed(2)}` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 } }, grid: { color: '#1f2937' } },
+        y: { ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 }, callback: v => `$${v}` }, grid: { color: '#1f2937' } }
+      }
+    }
+  });
+}
+
+function renderRSIChart(d) {
+  const ctx = document.getElementById('rsiChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.dates,
+      datasets: [{
+        label: 'RSI (14)',
+        data: d.rsi,
+        borderColor: '#a78bfa',
+        backgroundColor: 'rgba(167,139,250,0.08)',
+        borderWidth: 2,
+        pointRadius: 3,
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#9ca3af', font: { family: 'Share Tech Mono', size: 11 } } },
+        tooltip: {
+          backgroundColor: '#0d1117',
+          borderColor: '#a78bfa',
+          borderWidth: 1,
+          titleColor: '#a78bfa',
+          bodyColor: '#e5e7eb',
+        },
+        annotation: {}
+      },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 } }, grid: { color: '#1f2937' } },
+        y: {
+          min: 0, max: 100,
+          ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 } },
+          grid: { color: (ctx) => ctx.tick.value === 70 || ctx.tick.value === 30 ? '#374151' : '#1f2937' }
+        }
+      }
+    }
+  });
+}
+
+// Load signal
+fetch(`/stock/api/signal/${TICKER}`)
+  .then(r => r.json())
+  .then(s => {
+    const card = document.getElementById('signalCard');
+    card.innerHTML = `
+      <div class="sc-signal sc-${s.color}">
+        <span class="sc-emoji">${s.emoji}</span>
+        <span class="sc-label">${s.signal}</span>
+      </div>
+      <p class="sc-summary">${s.summary}</p>
+      <div class="sc-reasons">
+        ${s.reasons.map(r => `<div class="sc-reason"><span class="scr-dot">▸</span>${r}</div>`).join('')}
+      </div>
+    `;
+  });
+
+// Load AI insight
+fetch(`/stock/api/ai-insight/${TICKER}`)
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('aiBody').innerHTML = `<p class="ai-text">${data.insight || data.error || 'Insight unavailable.'}</p>`;
+  });
+
+// Candlestick chart
+let candleChartInstance = null;
+let candleLoaded = false;
+
+function switchChart(type) {
+  document.getElementById('tab-line').classList.toggle('active', type === 'line');
+  document.getElementById('tab-candle').classList.toggle('active', type === 'candle');
+  document.getElementById('priceChartWrap').style.display  = type === 'line'   ? '' : 'none';
+  document.getElementById('candleChartWrap').style.display = type === 'candle' ? '' : 'none';
+
+  if (type === 'candle' && !candleLoaded) {
+    candleLoaded = true;
+    fetch(`/stock/api/ohlc/${TICKER}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error || !d.candles) return;
+        renderCandlestick(d.candles);
+      });
+  }
+}
+
+function renderCandlestick(candles) {
+  const ctx = document.getElementById('candleChart').getContext('2d');
+  const labels = candles.map(c => c.date);
+  const smaData = candles.map(c => c.sma20);
+
+  // Build bar datasets manually for candlestick look using floating bars
+  const bullish = candles.map(c => c.close >= c.open ? [c.open, c.close] : [null, null]);
+  const bearish  = candles.map(c => c.close < c.open  ? [c.open, c.close] : [null, null]);
+  const wicks    = candles.map(c => [c.low, c.high]);
+
+  if (candleChartInstance) { candleChartInstance.destroy(); }
+  candleChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Wick', data: wicks, backgroundColor: 'rgba(148,163,184,0.4)', barPercentage: 0.15, categoryPercentage: 1, order: 2 },
+        { label: 'Bullish', data: bullish, backgroundColor: 'rgba(0,255,136,0.75)', barPercentage: 0.6, categoryPercentage: 0.8, order: 1 },
+        { label: 'Bearish', data: bearish, backgroundColor: 'rgba(239,68,68,0.75)', barPercentage: 0.6, categoryPercentage: 0.8, order: 1 },
+        { type: 'line', label: 'SMA 20', data: smaData, borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, borderDash: [4,4], fill: false, order: 0 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#9ca3af', font: { family: 'Share Tech Mono', size: 11 },
+          filter: item => item.text !== 'Wick' } },
+        tooltip: {
+          backgroundColor: '#0d1117', borderColor: '#2a3f55', borderWidth: 1,
+          titleColor: '#9ca3af', bodyColor: '#e5e7eb',
+          callbacks: {
+            label: ctx => {
+              const c = candles[ctx.dataIndex];
+              if (ctx.dataset.label === 'SMA 20') return ` SMA20: $${ctx.parsed.y}`;
+              if (ctx.dataset.label === 'Wick') return ` H: $${c.high}  L: $${c.low}`;
+              return ` O: $${c.open}  C: $${c.close}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 } }, grid: { color: '#1f2937' } },
+        y: { ticks: { color: '#6b7280', font: { family: 'Share Tech Mono', size: 10 }, callback: v => `$${v}` }, grid: { color: '#1f2937' } }
+      }
+    }
+  });
+}
+
+// Load stock news
+fetch(`/news/api/${TICKER}`)
+  .then(r => r.json())
+  .then(articles => {
+    const container = document.getElementById('stockNewsItems');
+    if(!articles.length) { container.innerHTML = '<p class="empty-hint">No recent news found for this ticker.</p>'; return; }
+    container.innerHTML = `<div class="news-grid">${articles.map(a => `
+      <div class="news-card">
+        <div class="nc-source">${a.source} · ${a.published}</div>
+        <a href="${a.link}" target="_blank" rel="noopener" class="nc-title">${a.title}</a>
+        <p class="nc-summary">${a.summary}</p>
+      </div>
+    `).join('')}</div>`;
+  });
+
+// Watchlist button
+document.getElementById('watchlistForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const fd = new FormData(this);
+  fetch('{{ url_for("stock.add_to_watchlist") }}', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      const btn = document.getElementById('watchlistBtn');
+      btn.textContent = d.message || '✓ Added';
+      btn.disabled = true;
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

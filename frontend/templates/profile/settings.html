@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Settings — StockSage{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">ACCOUNT SETTINGS</h1>
+    <p class="page-subtitle">Manage your profile, theme, price alerts, and portfolio export.</p>
+  </div>
+</div>
+
+<div class="settings-grid">
+
+  <!-- Left column -->
+  <div class="settings-col">
+
+    <!-- Profile info -->
+    <div class="settings-card">
+      <div class="sc-title">PROFILE INFO</div>
+      <div class="profile-badge-row">
+        <div class="profile-avatar">{{ current_user.username[:2].upper() }}</div>
+        <div>
+          <div style="font-family:var(--font-mono);font-size:1rem;color:#fff">{{ current_user.username }}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted)">{{ current_user.email }}</div>
+          <div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text-dim);margin-top:0.25rem">Member since {{ current_user.created_at.strftime("%B %Y") }}</div>
+        </div>
+      </div>
+      <div class="profile-stats">
+        <div class="prs-item"><span class="prs-num">{{ portfolio_count }}</span><span class="prs-label">Positions</span></div>
+        <div class="prs-item"><span class="prs-num">{{ alerts|length }}</span><span class="prs-label">Alerts</span></div>
+      </div>
+    </div>
+
+    <!-- Change username -->
+    <div class="settings-card">
+      <div class="sc-title">CHANGE USERNAME</div>
+      <form action="{{ url_for('profile.update') }}" method="POST" class="settings-form">
+        <input type="hidden" name="action" value="update_username" />
+        <div class="field-group">
+          <label class="field-label">NEW USERNAME</label>
+          <div class="field-wrap">
+            <span class="field-icon">⬡</span>
+            <input type="text" name="username" class="field-input" value="{{ current_user.username }}" minlength="3" maxlength="30" required />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary btn-sm mt-1">UPDATE USERNAME</button>
+      </form>
+    </div>
+
+    <!-- Change password -->
+    <div class="settings-card">
+      <div class="sc-title">CHANGE PASSWORD</div>
+      <form action="{{ url_for('profile.update') }}" method="POST" class="settings-form">
+        <input type="hidden" name="action" value="update_password" />
+        <div class="field-group">
+          <label class="field-label">CURRENT PASSWORD</label>
+          <div class="field-wrap">
+            <span class="field-icon">◉</span>
+            <input type="password" name="current_password" class="field-input" required />
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">NEW PASSWORD</label>
+          <div class="field-wrap">
+            <span class="field-icon">◉</span>
+            <input type="password" name="new_password" class="field-input" minlength="8" required />
+          </div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">CONFIRM NEW PASSWORD</label>
+          <div class="field-wrap">
+            <span class="field-icon">◉</span>
+            <input type="password" name="confirm_password" class="field-input" minlength="8" required />
+          </div>
+        </div>
+        <button type="submit" class="btn-primary btn-sm mt-1">CHANGE PASSWORD</button>
+      </form>
+    </div>
+
+    <!-- Theme -->
+    <div class="settings-card">
+      <div class="sc-title">THEME</div>
+      <div class="theme-options">
+        <button class="theme-opt {% if current_user.theme == 'dark' %}active{% endif %}" onclick="setTheme('dark')">
+          <span class="to-icon">◑</span> Dark Terminal
+        </button>
+        <button class="theme-opt {% if current_user.theme == 'light' %}active{% endif %}" onclick="setTheme('light')">
+          <span class="to-icon">☀</span> Light Mode
+        </button>
+      </div>
+    </div>
+
+    <!-- CSV Export -->
+    <div class="settings-card">
+      <div class="sc-title">EXPORT DATA</div>
+      <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:1rem">Download your full portfolio as a CSV file with live P&L calculations.</p>
+      <a href="{{ url_for('profile.export_portfolio') }}" class="btn-outline">⬇ DOWNLOAD PORTFOLIO CSV</a>
+    </div>
+
+  </div>
+
+  <!-- Right column - Price Alerts -->
+  <div class="settings-col">
+    <div class="settings-card">
+      <div class="sc-title">PRICE ALERTS</div>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:1rem">Get notified when a stock crosses your target price. Check alerts manually from this page.</p>
+
+      <form action="{{ url_for('profile.add_alert') }}" method="POST" class="alert-form">
+        <div class="alert-form-row">
+          <div class="field-group">
+            <label class="field-label">TICKER</label>
+            <div class="field-wrap">
+              <span class="field-icon">◎</span>
+              <input type="text" name="ticker" class="field-input" placeholder="e.g. AAPL" required maxlength="10" />
+            </div>
+          </div>
+          <div class="field-group">
+            <label class="field-label">CONDITION</label>
+            <div class="field-wrap">
+              <span class="field-icon">⇕</span>
+              <select name="alert_type" class="field-input">
+                <option value="above">Goes ABOVE</option>
+                <option value="below">Goes BELOW</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-group">
+            <label class="field-label">TARGET ($)</label>
+            <div class="field-wrap">
+              <span class="field-icon">$</span>
+              <input type="number" name="target_price" class="field-input" placeholder="e.g. 200.00" step="0.01" min="0.01" required />
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn-primary btn-sm mt-1">SET ALERT →</button>
+      </form>
+
+      <!-- Check alerts button -->
+      <div style="margin-top:1rem;margin-bottom:1rem;display:flex;gap:0.75rem;align-items:center">
+        <button class="btn-outline btn-sm" onclick="checkAlerts()">⟳ CHECK ALL ALERTS NOW</button>
+        <span id="alertCheckStatus" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted)"></span>
+      </div>
+
+      <!-- Active alerts list -->
+      {% if alerts %}
+      <div class="alerts-list">
+        {% for alert in alerts %}
+        <div class="alert-item {% if alert.is_triggered %}alert-triggered{% endif %}">
+          <div class="ai-left">
+            <span class="ai-ticker">{{ alert.ticker }}</span>
+            <span class="ai-condition">{{ alert.alert_type }} ${{ "%.2f"|format(alert.target_price) }}</span>
+          </div>
+          <div class="ai-right">
+            {% if alert.is_triggered %}
+            <span class="ai-status triggered">✓ TRIGGERED {{ alert.triggered_at.strftime("%b %d") if alert.triggered_at else '' }}</span>
+            {% else %}
+            <span class="ai-status active">● ACTIVE</span>
+            {% endif %}
+            <form action="{{ url_for('profile.remove_alert', alert_id=alert.id) }}" method="POST" style="display:inline">
+              <button type="submit" class="wl-remove" title="Remove">✕</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty-hint">No alerts set yet. Add your first price alert above.</p>
+      {% endif %}
+    </div>
+
+    <!-- Privacy note -->
+    <div class="settings-card" style="border-color:rgba(0,255,136,0.15)">
+      <div class="sc-title">🔒 YOUR PRIVACY</div>
+      <p style="font-size:0.8rem;color:var(--text-secondary);line-height:1.7">
+        StockSage stores only your username, email, and hashed password. Your portfolio data is private to your account.
+        We do not track your activity, sell your data, or run ads. Ever.
+      </p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setTheme(theme) {
+  fetch('{{ url_for("profile.toggle_theme") }}', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      document.documentElement.setAttribute('data-theme', d.theme);
+      document.getElementById('themeIcon').textContent = d.theme === 'light' ? '☀' : '◑';
+      document.querySelectorAll('.theme-opt').forEach(btn => btn.classList.remove('active'));
+      event.target.closest('.theme-opt').classList.add('active');
+    });
+}
+
+function checkAlerts() {
+  const status = document.getElementById('alertCheckStatus');
+  status.textContent = 'Checking…';
+  fetch('{{ url_for("profile.check_alerts") }}')
+    .then(r => r.json())
+    .then(d => {
+      if (d.triggered.length === 0) {
+        status.textContent = 'No alerts triggered.';
+      } else {
+        status.textContent = `${d.triggered.length} alert(s) triggered! Reloading…`;
+        setTimeout(() => location.reload(), 1500);
+      }
+    });
+}
+</script>
+{% endblock %}
