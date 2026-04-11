@@ -1,7 +1,7 @@
 """
 StockSage Stock Service
 Uses requests-based session with browser headers to bypass Yahoo Finance blocking.
-No C extensions needed — works on all platforms including Render free tier.
+No C-extension dependencies — works on all platforms including Render free tier.
 """
 
 import yfinance as yf
@@ -18,9 +18,7 @@ def _make_session():
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
         "Accept-Encoding": "gzip, deflate, br",
-        "DNT": "1",
         "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
     })
     return session
 
@@ -117,15 +115,21 @@ class StockService:
             hist  = stock.history(period="60d")
             if hist.empty:
                 return {"error": "No data available"}
+
             closes = hist["Close"]
             rsi    = self._calculate_rsi(closes)
             sma20  = closes.rolling(20).mean()
+
+            last20_closes = closes.tail(20)
+            last20_rsi    = rsi.tail(20)
+            last20_sma    = sma20.tail(20)
+
             return {
                 "ticker": ticker,
-                "dates":  [d.strftime("%b %d") for d in closes.tail(20).index],
-                "prices": [round(float(v), 2) for v in closes.tail(20).values],
-                "rsi":    [round(float(v), 2) if not np.isnan(v) else None for v in rsi.tail(20).values],
-                "sma20":  [round(float(v), 2) if not np.isnan(v) else None for v in sma20.tail(20).values],
+                "dates":  [d.strftime("%b %d") for d in last20_closes.index],
+                "prices": [round(float(v), 2) for v in last20_closes.values],
+                "rsi":    [round(float(v), 2) if not np.isnan(v) else None for v in last20_rsi.values],
+                "sma20":  [round(float(v), 2) if not np.isnan(v) else None for v in last20_sma.values],
             }
         except Exception as e:
             return {"error": str(e)}
@@ -133,9 +137,11 @@ class StockService:
     def get_ohlc_data(self, ticker: str, days: int = 30) -> dict:
         try:
             stock  = _make_ticker(ticker)
-            hist   = stock.history(period="60d" if days <= 30 else "90d").tail(days)
+            period = "60d" if days <= 30 else "90d"
+            hist   = stock.history(period=period).tail(days)
             if hist.empty:
                 return {"error": "No OHLC data available"}
+
             closes = hist["Close"]
             sma20  = closes.rolling(20).mean()
             rsi    = self._calculate_rsi(closes)
@@ -166,11 +172,11 @@ class StockService:
 
         if rsi is not None:
             if rsi < 30:
-                score += 2; reasons.append(f"RSI is {rsi} — oversold, may be due for a bounce.")
+                score += 2; reasons.append(f"RSI at {rsi} — oversold, may be due for a bounce.")
             elif rsi < 45:
-                score += 1; reasons.append(f"RSI at {rsi} — on the lower side, buying pressure may build.")
+                score += 1; reasons.append(f"RSI at {rsi} — on the lower side, buying pressure could build.")
             elif rsi > 70:
-                score -= 2; reasons.append(f"RSI is {rsi} — overbought, pullback possible.")
+                score -= 2; reasons.append(f"RSI at {rsi} — overbought, pullback possible.")
             elif rsi > 55:
                 score -= 1; reasons.append(f"RSI at {rsi} — mild bullish momentum, nearing overbought.")
             else:
@@ -178,23 +184,25 @@ class StockService:
 
         if sma20 and price:
             if price > sma20 * 1.02:
-                score += 1; reasons.append(f"Price (${price}) is above its 20-day average (${sma20}).")
+                score += 1; reasons.append(f"Price (${price}) above 20-day average (${sma20}) — constructive.")
             elif price < sma20 * 0.98:
-                score -= 1; reasons.append(f"Price (${price}) is below its 20-day average (${sma20}).")
+                score -= 1; reasons.append(f"Price (${price}) below 20-day average (${sma20}) — weakness.")
             else:
-                reasons.append(f"Trading near its 20-day average (${sma20}) — consolidating.")
+                reasons.append(f"Trading near 20-day average (${sma20}) — consolidation.")
 
-        if week_high and week_low and price and (week_high - week_low) > 0:
-            pos = (price - week_low) / (week_high - week_low) * 100
-            if pos < 20:
-                score += 1; reasons.append(f"Near 52-week low (${week_low}) — potential value opportunity.")
-            elif pos > 85:
-                score -= 1; reasons.append(f"Near 52-week high (${week_high}) — short-term correction risk.")
+        if week_high and week_low and price:
+            rng = week_high - week_low
+            if rng > 0:
+                pos = (price - week_low) / rng * 100
+                if pos < 20:
+                    score += 1; reasons.append(f"Near 52-week low (${week_low}) — potential value opportunity.")
+                elif pos > 85:
+                    score -= 1; reasons.append(f"Near 52-week high (${week_high}) — risk of correction.")
 
-        if   score >= 3: signal, color, emoji, summary = "STRONG BUY",  "success", "🚀", "Multiple indicators align positively. Strong buying opportunity."
+        if score >= 3:   signal, color, emoji, summary = "STRONG BUY", "success", "🚀", "Multiple indicators align positively. Solid buying opportunity."
         elif score >= 1: signal, color, emoji, summary = "BUY",         "success", "✅", "Indicators lean bullish. Consider adding to your portfolio."
-        elif score <= -3:signal, color, emoji, summary = "STRONG SELL", "danger",  "🔴", "Several warning signs. Consider reducing or exiting your position."
-        elif score <= -1:signal, color, emoji, summary = "SELL",        "danger",  "⚠️", "Indicators suggest caution. Avoid new entries."
+        elif score <= -3:signal, color, emoji, summary = "STRONG SELL", "danger",  "🔴", "Several warning signs. Consider reducing or exiting position."
+        elif score <= -1:signal, color, emoji, summary = "SELL",        "danger",  "⚠️",  "Caution advised. Consider trimming or avoiding new entries."
         else:            signal, color, emoji, summary = "HOLD",        "warning", "⏸️", "Neutral zone. Holding current position seems reasonable."
 
         return {"signal": signal, "color": color, "emoji": emoji,
@@ -219,7 +227,7 @@ class StockService:
             if filters.get("sma_position") == "above" and price < sma20: continue
             if filters.get("sma_position") == "below" and price > sma20: continue
             sig = self.generate_signal(data)
-            data["signal"] = sig["signal"]
+            data["signal"]       = sig["signal"]
             data["signal_color"] = sig["color"]
             results.append(data)
         return results
