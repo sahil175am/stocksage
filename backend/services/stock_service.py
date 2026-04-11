@@ -1,60 +1,62 @@
 """
-StockSage Stock Service - Fixed for Yahoo Finance rate limiting
-Uses curl_cffi session for reliable data fetching.
+StockSage Stock Service
+Uses requests-based session with browser headers to bypass Yahoo Finance blocking.
+No C extensions needed — works on all platforms including Render free tier.
 """
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime
+import requests
 
-# Fix Yahoo Finance blocking by using curl_cffi if available
-try:
-    from curl_cffi import requests as curl_requests
-    CURL_AVAILABLE = True
-except ImportError:
-    CURL_AVAILABLE = False
+
+def _make_session():
+    """Create a requests session that looks like a real browser."""
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    })
+    return session
 
 
 def _make_ticker(symbol: str):
-    """Create a yfinance Ticker with curl_cffi session if available."""
-    if CURL_AVAILABLE:
-        try:
-            session = curl_requests.Session(impersonate="chrome")
-            return yf.Ticker(symbol, session=session)
-        except Exception:
-            pass
-    return yf.Ticker(symbol)
+    """Create yfinance Ticker with browser-like session."""
+    try:
+        session = _make_session()
+        return yf.Ticker(symbol, session=session)
+    except Exception:
+        return yf.Ticker(symbol)
 
 
 class StockService:
-    """Core service for stock data fetching and technical analysis."""
 
     def get_current_price(self, ticker: str) -> dict:
         try:
             stock = _make_ticker(ticker)
             hist = stock.history(period="2d")
             if not hist.empty:
-                price = round(float(hist["Close"].iloc[-1]), 2)
-                return {"ticker": ticker, "price": price}
-            info = stock.info
-            price = (info.get("currentPrice") or info.get("regularMarketPrice")
-                     or info.get("previousClose") or 0)
-            return {"ticker": ticker, "price": float(price) if price else 0}
+                return {"ticker": ticker, "price": round(float(hist["Close"].iloc[-1]), 2)}
+            info = stock.info or {}
+            price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 0
+            return {"ticker": ticker, "price": float(price)}
         except Exception as e:
             return {"ticker": ticker, "price": 0, "error": str(e)}
 
     def get_full_analysis(self, ticker: str) -> dict:
         try:
             stock = _make_ticker(ticker)
-
-            # Get history first — more reliable than info
             hist = stock.history(period="60d")
             if hist.empty:
                 return {"error": f"No data found for '{ticker}'. Please check the symbol and try again."}
 
             closes = hist["Close"]
-            rsi = self._calculate_rsi(closes)
+            rsi   = self._calculate_rsi(closes)
             sma20 = closes.rolling(20).mean()
             sma50 = closes.rolling(50).mean()
 
@@ -66,15 +68,12 @@ class StockService:
             sma20_val     = round(float(sma20.iloc[-1]), 2) if not pd.isna(sma20.iloc[-1]) else None
             sma50_val     = round(float(sma50.iloc[-1]), 2) if len(closes) >= 50 and not pd.isna(sma50.iloc[-1]) else None
 
-            # Info is secondary — don't fail if it errors
             info = {}
             try:
                 info = stock.info or {}
             except Exception:
                 pass
 
-            # 52-week high/low from history if info unavailable
-            hist_1y = None
             week_high = info.get("fiftyTwoWeekHigh")
             week_low  = info.get("fiftyTwoWeekLow")
             if not week_high or not week_low:
@@ -86,32 +85,29 @@ class StockService:
                 except Exception:
                     pass
 
-            company_name = (info.get("longName") or info.get("shortName") or ticker)
-
             return {
-                "ticker":        ticker,
-                "company_name":  company_name,
-                "sector":        info.get("sector",   "N/A"),
-                "industry":      info.get("industry", "N/A"),
-                "current_price": current_price,
-                "prev_close":    prev_close,
-                "change":        change,
-                "change_pct":    change_pct,
-                "volume":        int(hist["Volume"].iloc[-1]) if "Volume" in hist.columns else 0,
-                "avg_volume":    info.get("averageVolume", 0),
-                "market_cap":    info.get("marketCap"),
-                "pe_ratio":      info.get("trailingPE") or info.get("forwardPE"),
-                "week_52_high":  week_high,
-                "week_52_low":   week_low,
-                "dividend_yield":info.get("dividendYield"),
-                "beta":          info.get("beta"),
-                "rsi":           current_rsi,
-                "sma20":         sma20_val,
-                "sma50":         sma50_val,
-                "description":   info.get("longBusinessSummary", ""),
-                "error":         None,
+                "ticker":         ticker,
+                "company_name":   info.get("longName") or info.get("shortName") or ticker,
+                "sector":         info.get("sector",   "N/A"),
+                "industry":       info.get("industry", "N/A"),
+                "current_price":  current_price,
+                "prev_close":     prev_close,
+                "change":         change,
+                "change_pct":     change_pct,
+                "volume":         int(hist["Volume"].iloc[-1]) if "Volume" in hist.columns else 0,
+                "avg_volume":     info.get("averageVolume", 0),
+                "market_cap":     info.get("marketCap"),
+                "pe_ratio":       info.get("trailingPE") or info.get("forwardPE"),
+                "week_52_high":   week_high,
+                "week_52_low":    week_low,
+                "dividend_yield": info.get("dividendYield"),
+                "beta":           info.get("beta"),
+                "rsi":            current_rsi,
+                "sma20":          sma20_val,
+                "sma50":          sma50_val,
+                "description":    info.get("longBusinessSummary", ""),
+                "error":          None,
             }
-
         except Exception as e:
             return {"error": f"Could not fetch data for '{ticker}'. ({str(e)})"}
 
@@ -121,21 +117,15 @@ class StockService:
             hist  = stock.history(period="60d")
             if hist.empty:
                 return {"error": "No data available"}
-
-            closes  = hist["Close"]
-            rsi     = self._calculate_rsi(closes)
-            sma20   = closes.rolling(20).mean()
-
-            last20_closes = closes.tail(20)
-            last20_rsi    = rsi.tail(20)
-            last20_sma    = sma20.tail(20)
-
+            closes = hist["Close"]
+            rsi    = self._calculate_rsi(closes)
+            sma20  = closes.rolling(20).mean()
             return {
                 "ticker": ticker,
-                "dates":  [d.strftime("%b %d") for d in last20_closes.index],
-                "prices": [round(float(v), 2) for v in last20_closes.values],
-                "rsi":    [round(float(v), 2) if not np.isnan(v) else None for v in last20_rsi.values],
-                "sma20":  [round(float(v), 2) if not np.isnan(v) else None for v in last20_sma.values],
+                "dates":  [d.strftime("%b %d") for d in closes.tail(20).index],
+                "prices": [round(float(v), 2) for v in closes.tail(20).values],
+                "rsi":    [round(float(v), 2) if not np.isnan(v) else None for v in rsi.tail(20).values],
+                "sma20":  [round(float(v), 2) if not np.isnan(v) else None for v in sma20.tail(20).values],
             }
         except Exception as e:
             return {"error": str(e)}
@@ -143,15 +133,12 @@ class StockService:
     def get_ohlc_data(self, ticker: str, days: int = 30) -> dict:
         try:
             stock  = _make_ticker(ticker)
-            period = "60d" if days <= 30 else "90d"
-            hist   = stock.history(period=period).tail(days)
+            hist   = stock.history(period="60d" if days <= 30 else "90d").tail(days)
             if hist.empty:
                 return {"error": "No OHLC data available"}
-
             closes = hist["Close"]
             sma20  = closes.rolling(20).mean()
             rsi    = self._calculate_rsi(closes)
-
             candles = []
             for i, (idx, row) in enumerate(hist.iterrows()):
                 candles.append({
@@ -169,66 +156,46 @@ class StockService:
             return {"error": str(e)}
 
     def generate_signal(self, analysis: dict) -> dict:
-        rsi        = analysis.get("rsi")
-        price      = analysis.get("current_price", 0)
-        sma20      = analysis.get("sma20", price)
-        week_high  = analysis.get("week_52_high")
-        week_low   = analysis.get("week_52_low")
-        score      = 0
-        reasons    = []
+        rsi       = analysis.get("rsi")
+        price     = analysis.get("current_price", 0)
+        sma20     = analysis.get("sma20", price)
+        week_high = analysis.get("week_52_high")
+        week_low  = analysis.get("week_52_low")
+        score     = 0
+        reasons   = []
 
         if rsi is not None:
             if rsi < 30:
-                score += 2
-                reasons.append(f"RSI is at {rsi} — the stock is oversold and may be due for a bounce.")
+                score += 2; reasons.append(f"RSI is {rsi} — oversold, may be due for a bounce.")
             elif rsi < 45:
-                score += 1
-                reasons.append(f"RSI sits at {rsi}, on the lower side — some buying pressure could build soon.")
+                score += 1; reasons.append(f"RSI at {rsi} — on the lower side, buying pressure may build.")
             elif rsi > 70:
-                score -= 2
-                reasons.append(f"RSI is at {rsi} — overbought territory, a pullback is possible.")
+                score -= 2; reasons.append(f"RSI is {rsi} — overbought, pullback possible.")
             elif rsi > 55:
-                score -= 1
-                reasons.append(f"RSI of {rsi} shows mild bullish momentum, getting closer to overbought.")
+                score -= 1; reasons.append(f"RSI at {rsi} — mild bullish momentum, nearing overbought.")
             else:
-                reasons.append(f"RSI at {rsi} is neutral — no extreme signals in either direction.")
+                reasons.append(f"RSI at {rsi} — neutral, no extreme signals.")
 
         if sma20 and price:
             if price > sma20 * 1.02:
-                score += 1
-                reasons.append(f"Price (${price}) is trading above its 20-day average (${sma20}) — constructive sign.")
+                score += 1; reasons.append(f"Price (${price}) is above its 20-day average (${sma20}).")
             elif price < sma20 * 0.98:
-                score -= 1
-                reasons.append(f"Price (${price}) is below its 20-day moving average (${sma20}) — short-term weakness.")
+                score -= 1; reasons.append(f"Price (${price}) is below its 20-day average (${sma20}).")
             else:
-                reasons.append(f"Stock is trading near its 20-day average (${sma20}) — price consolidation.")
+                reasons.append(f"Trading near its 20-day average (${sma20}) — consolidating.")
 
-        if week_high and week_low and price:
-            rng = week_high - week_low
-            if rng > 0:
-                pos = (price - week_low) / rng * 100
-                if pos < 20:
-                    score += 1
-                    reasons.append(f"Near its 52-week low (${week_low}) — could represent a value opportunity.")
-                elif pos > 85:
-                    score -= 1
-                    reasons.append(f"Near its 52-week high (${week_high}) — risk of short-term correction.")
+        if week_high and week_low and price and (week_high - week_low) > 0:
+            pos = (price - week_low) / (week_high - week_low) * 100
+            if pos < 20:
+                score += 1; reasons.append(f"Near 52-week low (${week_low}) — potential value opportunity.")
+            elif pos > 85:
+                score -= 1; reasons.append(f"Near 52-week high (${week_high}) — short-term correction risk.")
 
-        if score >= 3:
-            signal, color, emoji = "STRONG BUY", "success", "🚀"
-            summary = "Multiple indicators align positively. This looks like a solid buying opportunity."
-        elif score >= 1:
-            signal, color, emoji = "BUY", "success", "✅"
-            summary = "The overall indicators lean bullish. Consider adding this to your portfolio."
-        elif score <= -3:
-            signal, color, emoji = "STRONG SELL", "danger", "🔴"
-            summary = "Several warning signs are flashing. It may be wise to reduce or exit your position."
-        elif score <= -1:
-            signal, color, emoji = "SELL", "danger", "⚠️"
-            summary = "Indicators suggest caution. Consider trimming your position or avoiding new entries."
-        else:
-            signal, color, emoji = "HOLD", "warning", "⏸️"
-            summary = "The stock is in a neutral zone. Holding your current position seems reasonable."
+        if   score >= 3: signal, color, emoji, summary = "STRONG BUY",  "success", "🚀", "Multiple indicators align positively. Strong buying opportunity."
+        elif score >= 1: signal, color, emoji, summary = "BUY",         "success", "✅", "Indicators lean bullish. Consider adding to your portfolio."
+        elif score <= -3:signal, color, emoji, summary = "STRONG SELL", "danger",  "🔴", "Several warning signs. Consider reducing or exiting your position."
+        elif score <= -1:signal, color, emoji, summary = "SELL",        "danger",  "⚠️", "Indicators suggest caution. Avoid new entries."
+        else:            signal, color, emoji, summary = "HOLD",        "warning", "⏸️", "Neutral zone. Holding current position seems reasonable."
 
         return {"signal": signal, "color": color, "emoji": emoji,
                 "summary": summary, "reasons": reasons, "score": score}
@@ -252,7 +219,7 @@ class StockService:
             if filters.get("sma_position") == "above" and price < sma20: continue
             if filters.get("sma_position") == "below" and price > sma20: continue
             sig = self.generate_signal(data)
-            data["signal"]       = sig["signal"]
+            data["signal"] = sig["signal"]
             data["signal_color"] = sig["color"]
             results.append(data)
         return results
