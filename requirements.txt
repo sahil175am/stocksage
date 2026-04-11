@@ -5,8 +5,8 @@ flask-bcrypt==1.0.1
 flask-wtf==1.2.1
 flask-mail==0.10.0
 yfinance==0.2.61
-pandas==2.2.2
-numpy==1.26.4
+pandas==2.2.3
+numpy==2.2.4
 requests==2.32.3
 python-dotenv==1.0.1
 werkzeug==3.0.3
